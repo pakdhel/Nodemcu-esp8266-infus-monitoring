@@ -41,7 +41,10 @@ const float tetesPerLiter = 13;
 bool initialWeightRetrieved = false;
 float initialInfusionWeight = 0.0;
 
+float lastRate = 0;
+
 float infusionVolume(int dropCountDisplay);
+float smoothDripRate(float currentRate);
 
 void setup() {
   pinMode(pin, INPUT);
@@ -78,69 +81,94 @@ void setup() {
 
 void loop() {
   unsigned long currMillis = millis();
-  if (digitalRead(pin) == 1 && currMillis - lastDropTime > 900) { 
+
+  // dynamic debounceDelay based on drip rate
+  unsigned long debounceDelay = 100;
+  if (dripRate > 0) {
+    debounceDelay = 30000 / dripRate / 2;
+  }
+
+  static unsigned long debounceTime = 0;
+  bool lastState = false;
+  bool dropDetected = false;
+
+  int currentState = digitalRead(pin);
+  if (currentState == 1 && lastState == 0 && (currMillis - debounceTime) > debounceDelay) { 
+    debounceTime = currMillis;
+    dropDetected = true;
+  }
+  lastState = currentState;
+
+  if (dropDetected) {
     unsigned long dropTime = millis();
     unsigned long diff = dropTime - lastDropTime;
-
-    totalDropTimeDisplay += diff;
-    dropCountDisplay++;
-
+    lastDropTime = dropTime;
     totalDropTime += diff;
     dropCount++;
-    lastDropTime = dropTime;
+    
+    dropCountDisplay++;
+    totalDropTimeDisplay += diff;
   }
 
 
   if (currMillis - prevMillis >= interval) {
-    if (totalDropTime != 0) {
+    if (totalDropTime != 0 && dropCount != 0) {
       dripRate = (float)dropCount / ((float)totalDropTime / 60000.0);  
     } else {
       dripRate = 0;
     }
+
+    dripRate = smoothDripRate(dripRate);
 
     // Reset totalDropTime, dropCount, dan prevMillis
     totalDropTime = 0;
     dropCount = 0;
     prevMillis = currMillis;
 
-  }
+    if (!initialWeightRetrieved) {
+      if (Firebase.RTDB.getFloat(&fbdo, "pasien/1/initial_infusion_weight")) {
+        initialInfusionWeight = fbdo.floatData();
+        Serial.print("initialInfusionWeight: ");
+        Serial.println(initialInfusionWeight);
+        initialWeightRetrieved = true;
+      } else {
+        Serial.println(fbdo.errorReason());
+      }
+    }
 
-  if (Firebase.RTDB.getFloat(&fbdo, "pasien/1/initial_infusion_weight")) {
-    initialInfusionWeight = fbdo.floatData();
-    Serial.print("initialInfusionWeight: ");
-    Serial.println(initialInfusionWeight);
-    initialWeightRetrieved = true;
-  } else {
-    Serial.println(fbdo.errorReason());
-  }
+    float volDigunakan = infusionVolume(dropCountDisplay);
+    float remainInfusionWeight = initialInfusionWeight - volDigunakan;
 
-  float volDigunakan = infusionVolume(dropCountDisplay);
-  float remainInfusionWeight = initialInfusionWeight - volDigunakan;
+    Serial.print("total waktu tiap tetesan: ");
+    Serial.print((float)totalDropTimeDisplay/1000);
+    Serial.print(", drop: ");
+    Serial.print(dropCountDisplay);
+    Serial.print(", drip rate: ");
+    Serial.println(dripRate);
 
-  Serial.print("total waktu tiap tetesan: ");
-  Serial.print((float)totalDropTimeDisplay/1000);
-  Serial.print(", drop: ");
-  Serial.print(dropCountDisplay);
-  Serial.print(", drip rate: ");
-  Serial.println(dripRate);
-
-
-  if (Firebase.ready() && signupOK){
-    Firebase.RTDB.setFloat(&fbdo, "pasien/1/drip_rate", dripRate);
-    Firebase.RTDB.setDouble(&fbdo, "pasien/1/time", millis());
-    if (Firebase.RTDB.setFloat(&fbdo, "pasien/1/infusion_weight", remainInfusionWeight)) {
-      Serial.println("PASSED");
-      Serial.println("PATH: " + fbdo.dataPath());
-      Serial.println("TYPE: " + fbdo.dataType());
-      Serial.print("remainInfusionWeight: ");
-      Serial.println(remainInfusionWeight);
-    } else {
-      Serial.println("FAILED");
-      Serial.println("REASON: " + fbdo.errorReason());
+    if (Firebase.ready() && signupOK){
+      Firebase.RTDB.setFloat(&fbdo, "pasien/1/drip_rate", dripRate);
+      Firebase.RTDB.setDouble(&fbdo, "pasien/1/time", millis());
+      if (Firebase.RTDB.setFloat(&fbdo, "pasien/1/infusion_weight", remainInfusionWeight)) {
+        Serial.println("PASSED");
+        Serial.println("PATH: " + fbdo.dataPath());
+        Serial.println("TYPE: " + fbdo.dataType());
+        Serial.print("remainInfusionWeight: ");
+        Serial.println(remainInfusionWeight);
+      } else {
+        Serial.println("FAILED");
+        Serial.println("REASON: " + fbdo.errorReason());
+      }
     }
   }
 }
 
 float infusionVolume(int dropCountDisplay) {
   return (float) dropCountDisplay / tetesPerLiter; 
+}
+
+float smoothDripRate(float currentRate) {
+  float smoothedRate = (lastRate * 0.7 ) + (currentRate * 0.3);
+  lastRate = smoothedRate;
+  return smoothedRate;
 }

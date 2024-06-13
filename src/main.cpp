@@ -34,9 +34,14 @@ unsigned long prevMillis = 0;
 unsigned long interval = 3000;
 
 float dripRate = 0;
-float dropCountDisplay = 0;
+int dropCountDisplay = 0;
 int pin = 4;
 int dropCount = 0;
+const float tetesPerLiter = 13;
+bool initialWeightRetrieved = false;
+float initialInfusionWeight = 0.0;
+
+float infusionVolume(int dropCountDisplay);
 
 void setup() {
   pinMode(pin, INPUT);
@@ -65,7 +70,7 @@ void setup() {
     Serial.printf("%s\n", config.signer.signupError.message.c_str());
   }
 
-  config.token_status_callback = tokenStatusCallback; //see addons/TokenHelper.h
+  config.token_status_callback = tokenStatusCallback; 
   
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
@@ -73,8 +78,6 @@ void setup() {
 
 void loop() {
   unsigned long currMillis = millis();
-  // debounceDelay = 2000, untuk kecepatan tetesan ~ 20, debounceDelay = 1000 untuk kecepatan tetesan ~ 30, debounceDelay = 900 untuk kecepatan tetesan ~ 20 - 60
-  // deounceDelay = 900 untuk kecepatan tetesan ~ 35
   if (digitalRead(pin) == 1 && currMillis - lastDropTime > 900) { 
     unsigned long dropTime = millis();
     unsigned long diff = dropTime - lastDropTime;
@@ -87,7 +90,8 @@ void loop() {
     lastDropTime = dropTime;
   }
 
-  if (currMillis - prevMillis >= interval) { // interval = 3000 untuk kecepatan tetesan ~ 20 - 60
+
+  if (currMillis - prevMillis >= interval) {
     if (totalDropTime != 0) {
       dripRate = (float)dropCount / ((float)totalDropTime / 60000.0);  
     } else {
@@ -101,6 +105,18 @@ void loop() {
 
   }
 
+  if (Firebase.RTDB.getFloat(&fbdo, "pasien/1/initial_infusion_weight")) {
+    initialInfusionWeight = fbdo.floatData();
+    Serial.print("initialInfusionWeight: ");
+    Serial.println(initialInfusionWeight);
+    initialWeightRetrieved = true;
+  } else {
+    Serial.println(fbdo.errorReason());
+  }
+
+  float volDigunakan = infusionVolume(dropCountDisplay);
+  float remainInfusionWeight = initialInfusionWeight - volDigunakan;
+
   Serial.print("total waktu tiap tetesan: ");
   Serial.print((float)totalDropTimeDisplay/1000);
   Serial.print(", drop: ");
@@ -108,17 +124,23 @@ void loop() {
   Serial.print(", drip rate: ");
   Serial.println(dripRate);
 
+
   if (Firebase.ready() && signupOK){
-    if (Firebase.RTDB.setFloat(&fbdo, "pasien/1/drip_rate", dripRate)){
+    Firebase.RTDB.setFloat(&fbdo, "pasien/1/drip_rate", dripRate);
+    Firebase.RTDB.setDouble(&fbdo, "pasien/1/time", millis());
+    if (Firebase.RTDB.setFloat(&fbdo, "pasien/1/infusion_weight", remainInfusionWeight)) {
       Serial.println("PASSED");
       Serial.println("PATH: " + fbdo.dataPath());
       Serial.println("TYPE: " + fbdo.dataType());
-      Serial.print("Drip rate: ");
-      Serial.println(dripRate);
+      Serial.print("remainInfusionWeight: ");
+      Serial.println(remainInfusionWeight);
     } else {
       Serial.println("FAILED");
       Serial.println("REASON: " + fbdo.errorReason());
-    } 
+    }
   }
+}
 
+float infusionVolume(int dropCountDisplay) {
+  return (float) dropCountDisplay / tetesPerLiter; 
 }

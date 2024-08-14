@@ -8,14 +8,14 @@
 #include "addons/RTDBHelper.h"
 
 // Insert your network credentials
-#define WIFI_SSID "FADHEL HAYAT"
-#define WIFI_PASSWORD "manggarupi000"
+#define WIFI_SSID "SSID"
+#define WIFI_PASSWORD "password"
 
 // Insert Firebase project API Key
-#define API_KEY "AIzaSyBHhSeUw4OytlaBiPemZ7FTC5jJ_oO5sPw"
+#define API_KEY ""
 
 // Insert RTDB URLefine the RTDB URL */
-#define DATABASE_URL "https://esp866-monitoring-infus-default-rtdb.asia-southeast1.firebasedatabase.app" 
+#define DATABASE_URL "" 
 
 //Define Firebase Data object
 FirebaseData fbdo;

@@ -1,3 +1,4 @@
+#include "secrets.h"
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <Firebase_ESP_Client.h>
@@ -6,16 +7,6 @@
 #include "addons/TokenHelper.h"
 //Provide the RTDB payload printing info and other helper functions.
 #include "addons/RTDBHelper.h"
-
-// Insert your network credentials
-#define WIFI_SSID "SSID"
-#define WIFI_PASSWORD "password"
-
-// Insert Firebase project API Key
-#define API_KEY ""
-
-// Insert RTDB URLefine the RTDB URL */
-#define DATABASE_URL "" 
 
 //Define Firebase Data object
 FirebaseData fbdo;
